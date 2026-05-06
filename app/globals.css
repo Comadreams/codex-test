@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-dreamz-bg text-dreamz-text;
+}
+
+input, textarea, select {
+  @apply bg-dreamz-card border border-purple-300/30 rounded-lg px-3 py-2 text-dreamz-text placeholder:text-dreamz-muted;
+}
+
+button {
+  @apply rounded-lg;
+}
