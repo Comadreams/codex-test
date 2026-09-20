@@ -90,8 +90,11 @@ export default function Page() {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const target = String(over.id);
-    if (!STATUSES.includes(target as CardStatus)) return;
-    persist({ ...state, cards: state.cards.map((c) => (c.id === active.id ? { ...c, status: target as CardStatus } : c)) });
+    const targetStatus = STATUSES.includes(target as CardStatus)
+      ? (target as CardStatus)
+      : activeCards.find((card) => card.id === target)?.status;
+    if (!targetStatus) return;
+    persist({ ...state, cards: state.cards.map((c) => (c.id === active.id ? { ...c, status: targetStatus } : c)) });
   };
 
   if (!activeProjectId) {
@@ -124,7 +127,7 @@ export default function Page() {
 
       <section className="bg-dreamz-panel p-4 rounded-2xl border border-purple-300/20 space-y-3">
         <h2 className="text-xl">Add card (you can paste an image into Notes)</h2>
-        <form action={saveCard} className="grid md:grid-cols-2 gap-3">
+        <form key={editing?.id ?? "new"} action={saveCard} className="grid md:grid-cols-2 gap-3">
           <input name="title" required placeholder="Card title" defaultValue={editing?.title} />
           <select name="status" defaultValue={editing?.status ?? "Ideas"}>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
           <textarea name="description" placeholder="Description" defaultValue={editing?.description} />
