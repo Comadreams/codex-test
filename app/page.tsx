@@ -9,31 +9,35 @@ import { CSS } from "@dnd-kit/utilities";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { useDreamzStore } from "@/lib/store";
 import { STATUSES, StoryCard, CardStatus } from "@/lib/types";
+import { deleteCard, moveCard, upsertCard } from "@/lib/board";
 
-function SortableCard({ card, onEdit, onDelete }: { card: StoryCard; onEdit: (c: StoryCard) => void; onDelete: (id: string) => void }) {
+function SortableCard({ card, onEdit, onDelete, onMove }: { card: StoryCard; onEdit: (c: StoryCard) => void; onDelete: (id: string) => void; onMove: (id: string, status: CardStatus) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: card.id });
   return (
     <article ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition }} className="rounded-xl bg-dreamz-card p-3 border border-purple-300/20 space-y-2">
-      <button className="text-left w-full" onClick={() => onEdit(card)}>
+      <button className="text-left w-full" onClick={() => onEdit(card)} aria-label={`Edit ${card.title}`}>
         <h3 className="text-lg font-semibold">{card.title}</h3>
         <p className="text-sm text-dreamz-muted line-clamp-3">{card.description || "No description yet."}</p>
+        {card.notes && <p className="text-sm text-dreamz-muted line-clamp-2">Notes: {card.notes}</p>}
         {card.imageUrl && <Image src={card.imageUrl} alt={card.title} width={300} height={180} className="mt-2 rounded-lg w-full h-28 object-cover" unoptimized />}
       </button>
+      {card.attachmentUrl && <a className="text-xs text-purple-200 underline" href={card.attachmentUrl} target="_blank" rel="noopener noreferrer">Open attachment</a>}
       <div className="flex justify-between">
-        <button className="text-xs text-purple-200" {...attributes} {...listeners}>Drag</button>
-        <button className="text-xs text-red-300" onClick={() => onDelete(card.id)}><Trash2 className="inline h-3 w-3"/> Delete</button>
+        <button type="button" className="text-xs text-purple-200 touch-none cursor-grab" {...attributes} {...listeners} aria-label={`Drag ${card.title}`}>Drag</button>
+        <label className="text-xs text-purple-200">Move to <select aria-label={`Move ${card.title} to`} value={card.status} onChange={(e) => onMove(card.id, e.target.value as CardStatus)}>{STATUSES.map((status) => <option key={status}>{status}</option>)}</select></label>
+        <button type="button" className="text-xs text-red-300" onClick={() => onDelete(card.id)} aria-label={`Delete ${card.title}`}><Trash2 className="inline h-3 w-3"/> Delete</button>
       </div>
     </article>
   );
 }
 
-function StatusColumn({ status, cards, onEdit, onDelete }: { status: CardStatus; cards: StoryCard[]; onEdit: (c: StoryCard) => void; onDelete: (id: string) => void }) {
+function StatusColumn({ status, cards, onEdit, onDelete, onMove }: { status: CardStatus; cards: StoryCard[]; onEdit: (c: StoryCard) => void; onDelete: (id: string) => void; onMove: (id: string, status: CardStatus) => void }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   return (
     <div ref={setNodeRef} className={`rounded-xl p-3 min-h-64 transition ${isOver ? "bg-purple-700/30 ring-2 ring-dreamz-accent" : "bg-black/20"}`}>
       <h3 className="font-semibold text-lg mb-2">{status}</h3>
       <SortableContext items={cards.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-        <div className="space-y-3">{cards.length === 0 ? <p className="text-sm text-dreamz-muted">Drop cards here</p> : cards.map((card) => <SortableCard key={card.id} card={card} onEdit={onEdit} onDelete={onDelete} />)}</div>
+        <div className="space-y-3">{cards.length === 0 ? <p className="text-sm text-dreamz-muted">Drop cards here</p> : cards.map((card) => <SortableCard key={card.id} card={card} onEdit={onEdit} onDelete={onDelete} onMove={onMove} />)}</div>
       </SortableContext>
     </div>
   );
@@ -46,6 +50,7 @@ export default function Page() {
   const [username, setUsername] = useState("DemoUser");
   const [editing, setEditing] = useState<StoryCard | null>(null);
   const [pastedImage, setPastedImage] = useState<string>("");
+  const [notice, setNotice] = useState("");
   const sensors = useSensors(useSensor(PointerSensor));
 
   const activeProject = state.projects.find((p) => p.id === activeProjectId) ?? null;
@@ -70,20 +75,37 @@ export default function Page() {
 
   const saveCard = (form: FormData) => {
     if (!activeProjectId) return;
-    const title = String(form.get("title") || "");
+    const title = String(form.get("title") || "").trim();
+    if (!title) return;
     const description = String(form.get("description") || "");
     const tags = String(form.get("tags") || "").split(",").map((v) => v.trim()).filter(Boolean);
     const status = String(form.get("status") || "Ideas") as CardStatus;
     const imageUrl = pastedImage || String(form.get("imageUrl") || "");
+    const notes = String(form.get("notes") || "");
+    const attachmentInput = String(form.get("attachmentUrl") || "").trim();
+    const attachmentUrl = /^https?:\/\//i.test(attachmentInput) ? attachmentInput : "";
 
     const card: StoryCard = editing
-      ? { ...editing, title, description, tags, status, imageUrl, updatedBy: username, updatedAt: new Date().toISOString() }
-      : { id: uuid(), projectId: activeProjectId, title, description, tags, status, imageUrl, comments: [], updatedBy: username, updatedAt: new Date().toISOString() };
+      ? { ...editing, title, description, tags, status, imageUrl, notes, attachmentUrl, updatedBy: username, updatedAt: new Date().toISOString() }
+      : { id: uuid(), projectId: activeProjectId, title, description, tags, status, imageUrl, notes, attachmentUrl, comments: [], updatedBy: username, updatedAt: new Date().toISOString() };
 
-    const nextCards = editing ? state.cards.map((c) => (c.id === card.id ? card : c)) : [...state.cards, card];
-    persist({ ...state, cards: nextCards });
+    persist(upsertCard(state, card));
+    setNotice(editing ? `Updated ${title}` : `Added ${title}`);
     setEditing(null);
     setPastedImage("");
+  };
+
+  const removeCard = (id: string) => {
+    const card = activeCards.find((item) => item.id === id);
+    if (!card || !window.confirm(`Delete “${card.title}”? This cannot be undone.`)) return;
+    persist(deleteCard(state, id));
+    if (editing?.id === id) { setEditing(null); setPastedImage(""); }
+    setNotice(`Deleted ${card.title}`);
+  };
+
+  const relocateCard = (id: string, status: CardStatus, beforeId?: string) => {
+    persist({ ...state, cards: moveCard(state.cards, id, status, beforeId) });
+    setNotice(`Moved card to ${status}`);
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -94,7 +116,7 @@ export default function Page() {
       ? (target as CardStatus)
       : activeCards.find((card) => card.id === target)?.status;
     if (!targetStatus) return;
-    persist({ ...state, cards: state.cards.map((c) => (c.id === active.id ? { ...c, status: targetStatus } : c)) });
+    relocateCard(String(active.id), targetStatus, STATUSES.includes(target as CardStatus) ? undefined : target);
   };
 
   if (!activeProjectId) {
@@ -126,22 +148,25 @@ export default function Page() {
       </div>
 
       <section className="bg-dreamz-panel p-4 rounded-2xl border border-purple-300/20 space-y-3">
-        <h2 className="text-xl">Add card (you can paste an image into Notes)</h2>
+        <h2 className="text-xl">{editing ? `Edit ${editing.title}` : "Add card"}</h2>
+        {notice && <p role="status" className="text-sm text-purple-200">{notice}</p>}
         <form key={editing?.id ?? "new"} action={saveCard} className="grid md:grid-cols-2 gap-3">
-          <input name="title" required placeholder="Card title" defaultValue={editing?.title} />
-          <select name="status" defaultValue={editing?.status ?? "Ideas"}>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
-          <textarea name="description" placeholder="Description" defaultValue={editing?.description} />
-          <input name="tags" placeholder="tags, comma, separated" defaultValue={editing?.tags?.join(",")} />
-          <input name="imageUrl" placeholder="Reference image URL (optional)" defaultValue={editing?.imageUrl} />
-          <textarea onPaste={onPasteImage} placeholder="Paste image here (Ctrl+V) or write notes" />
+          <input name="title" aria-label="Card title" required placeholder="Card title" defaultValue={editing?.title ?? ""} />
+          <select name="status" aria-label="Card status" defaultValue={editing?.status ?? "Ideas"}>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
+          <textarea name="description" aria-label="Description" placeholder="Description" defaultValue={editing?.description ?? ""} />
+          <input name="tags" aria-label="Tags" placeholder="tags, comma, separated" defaultValue={editing?.tags?.join(",") ?? ""} />
+          <input name="imageUrl" aria-label="Reference image URL" placeholder="Reference image URL (optional)" defaultValue={editing?.imageUrl ?? ""} />
+          <input name="attachmentUrl" type="url" aria-label="Attachment URL" placeholder="Attachment URL (optional)" defaultValue={editing?.attachmentUrl ?? ""} />
+          <textarea name="notes" aria-label="Notes" onPaste={onPasteImage} placeholder="Notes (you can paste an image here too)" defaultValue={editing?.notes ?? ""} />
           {pastedImage && <Image src={pastedImage} alt="Pasted preview" width={320} height={180} className="rounded-lg h-28 w-full object-cover" unoptimized />}
           <button className="px-4 py-2 bg-dreamz-accent text-black font-semibold">{editing ? "Update" : "Add"} card</button>
+          {editing && <button type="button" className="px-4 py-2 bg-purple-900/40" onClick={() => { setEditing(null); setPastedImage(""); }}>Cancel edit</button>}
         </form>
       </section>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="grid lg:grid-cols-5 gap-3">
-          {STATUSES.map((status) => <StatusColumn key={status} status={status} cards={activeCards.filter((c) => c.status === status)} onEdit={setEditing} onDelete={(id) => persist({ ...state, cards: state.cards.filter((c) => c.id !== id) })} />)}
+          {STATUSES.map((status) => <StatusColumn key={status} status={status} cards={activeCards.filter((c) => c.status === status)} onEdit={(card) => { setEditing(card); setPastedImage(""); window.scrollTo({ top: 0, behavior: "smooth" }); }} onDelete={removeCard} onMove={relocateCard} />)}
         </div>
       </DndContext>
     </main>

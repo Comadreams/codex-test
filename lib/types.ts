@@ -17,6 +17,7 @@ export type StoryCard = {
   status: CardStatus;
   tags: string[];
   imageUrl?: string;
+  notes?: string;
   attachmentUrl?: string;
   comments: Comment[];
   updatedBy: string;
