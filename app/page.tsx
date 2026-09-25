@@ -75,6 +75,7 @@ export default function Page() {
 
   const saveCard = (form: FormData) => {
     if (!activeProjectId) return;
+    if (editing && editing.projectId !== activeProjectId) return;
     const title = String(form.get("title") || "").trim();
     if (!title) return;
     const description = String(form.get("description") || "");
@@ -119,6 +120,13 @@ export default function Page() {
     relocateCard(String(active.id), targetStatus, STATUSES.includes(target as CardStatus) ? undefined : target);
   };
 
+  const openProject = (id: string | null) => {
+    setEditing(null);
+    setPastedImage("");
+    setNotice("");
+    setActiveProjectId(id);
+  };
+
   if (!activeProjectId) {
     return (
       <main className="p-6 max-w-3xl mx-auto space-y-6">
@@ -131,7 +139,7 @@ export default function Page() {
           </div>
           <div className="space-y-2">
             {state.projects.length === 0 ? <p className="text-dreamz-muted">No projects yet. Create one to start.</p> : state.projects.map((p) => (
-              <button key={p.id} className="w-full text-left p-3 rounded-lg border border-purple-300/20 hover:border-dreamz-accent" onClick={() => setActiveProjectId(p.id)}>{p.name}</button>
+              <button key={p.id} className="w-full text-left p-3 rounded-lg border border-purple-300/20 hover:border-dreamz-accent" onClick={() => openProject(p.id)}>{p.name}</button>
             ))}
           </div>
         </section>
@@ -142,7 +150,7 @@ export default function Page() {
   return (
     <main className="p-6 space-y-5">
       <div className="flex items-center gap-3">
-        <button className="px-3 py-2 bg-purple-900/40" onClick={() => setActiveProjectId(null)}><ArrowLeft className="inline h-4 w-4"/> Projects</button>
+        <button className="px-3 py-2 bg-purple-900/40" onClick={() => openProject(null)}><ArrowLeft className="inline h-4 w-4"/> Projects</button>
         <h1 className="text-3xl font-bold">{activeProject?.name}</h1>
         <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Your name" className="ml-auto"/>
       </div>
