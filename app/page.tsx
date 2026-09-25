@@ -174,7 +174,7 @@ export default function Page() {
           <input name="imageUrl" aria-label="Reference image URL" placeholder="Reference image URL (optional)" defaultValue={editing?.imageUrl ?? ""} />
           <input name="attachmentUrl" type="url" aria-label="Attachment URL" placeholder="Attachment URL (optional)" defaultValue={editing?.attachmentUrl ?? ""} />
           <textarea name="notes" aria-label="Notes" onPaste={onPasteImage} placeholder="Notes (you can paste an image here too)" defaultValue={editing?.notes ?? ""} />
-          {pastedImage && <Image src={pastedImage} alt="Pasted preview" width={320} height={180} className="rounded-lg h-64 w-full object-contain" unoptimized />}
+          {(pastedImage || editing?.imageUrl) && <Image src={pastedImage || editing?.imageUrl || ""} alt="Reference image preview" width={320} height={180} className="rounded-lg h-64 w-full object-contain" unoptimized />}
           <button className="px-4 py-2 bg-dreamz-accent text-black font-semibold">{editing ? "Update" : "Add"} card</button>
           {editing && <button type="button" className="px-4 py-2 bg-purple-900/40" onClick={() => { setEditing(null); setFormStatus("Ideas"); setStatusChanged(false); setPastedImage(""); }}>Cancel edit</button>}
         </form>
