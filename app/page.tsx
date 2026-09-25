@@ -19,7 +19,7 @@ function SortableCard({ card, onEdit, onDelete, onMove }: { card: StoryCard; onE
         <h3 className="text-lg font-semibold">{card.title}</h3>
         <p className="text-sm text-dreamz-muted line-clamp-3">{card.description || "No description yet."}</p>
         {card.notes && <p className="text-sm text-dreamz-muted line-clamp-2">Notes: {card.notes}</p>}
-        {card.imageUrl && <Image src={card.imageUrl} alt={card.title} width={300} height={180} className="mt-2 rounded-lg w-full h-28 object-cover" unoptimized />}
+        {card.imageUrl && <Image src={card.imageUrl} alt={card.title} width={300} height={180} className="mt-2 rounded-lg w-full h-48 object-contain" unoptimized />}
       </button>
       {card.attachmentUrl && <a className="text-xs text-purple-200 underline" href={card.attachmentUrl} target="_blank" rel="noopener noreferrer">Open attachment</a>}
       <div className="flex justify-between">
@@ -49,6 +49,8 @@ export default function Page() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [username, setUsername] = useState("DemoUser");
   const [editing, setEditing] = useState<StoryCard | null>(null);
+  const [formStatus, setFormStatus] = useState<CardStatus>("Ideas");
+  const [statusChanged, setStatusChanged] = useState(false);
   const [pastedImage, setPastedImage] = useState<string>("");
   const [notice, setNotice] = useState("");
   const sensors = useSensors(useSensor(PointerSensor));
@@ -80,7 +82,8 @@ export default function Page() {
     if (!title) return;
     const description = String(form.get("description") || "");
     const tags = String(form.get("tags") || "").split(",").map((v) => v.trim()).filter(Boolean);
-    const status = String(form.get("status") || "Ideas") as CardStatus;
+    const currentCard = editing ? state.cards.find((item) => item.id === editing.id) : null;
+    const status = editing && !statusChanged ? (currentCard?.status ?? editing.status) : formStatus;
     const imageUrl = pastedImage || String(form.get("imageUrl") || "");
     const notes = String(form.get("notes") || "");
     const attachmentInput = String(form.get("attachmentUrl") || "").trim();
@@ -93,6 +96,8 @@ export default function Page() {
     persist(upsertCard(state, card));
     setNotice(editing ? `Updated ${title}` : `Added ${title}`);
     setEditing(null);
+    setFormStatus("Ideas");
+    setStatusChanged(false);
     setPastedImage("");
   };
 
@@ -106,6 +111,7 @@ export default function Page() {
 
   const relocateCard = (id: string, status: CardStatus, beforeId?: string) => {
     persist({ ...state, cards: moveCard(state.cards, id, status, beforeId) });
+    if (editing?.id === id && !statusChanged) setFormStatus(status);
     setNotice(`Moved card to ${status}`);
   };
 
@@ -122,6 +128,8 @@ export default function Page() {
 
   const openProject = (id: string | null) => {
     setEditing(null);
+    setFormStatus("Ideas");
+    setStatusChanged(false);
     setPastedImage("");
     setNotice("");
     setActiveProjectId(id);
@@ -160,21 +168,21 @@ export default function Page() {
         {notice && <p role="status" className="text-sm text-purple-200">{notice}</p>}
         <form key={editing?.id ?? "new"} action={saveCard} className="grid md:grid-cols-2 gap-3">
           <input name="title" aria-label="Card title" required placeholder="Card title" defaultValue={editing?.title ?? ""} />
-          <select name="status" aria-label="Card status" defaultValue={editing?.status ?? "Ideas"}>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
+          <select name="status" aria-label="Card status" value={formStatus} onChange={(event) => { setFormStatus(event.target.value as CardStatus); setStatusChanged(true); }}>{STATUSES.map((s) => <option key={s}>{s}</option>)}</select>
           <textarea name="description" aria-label="Description" placeholder="Description" defaultValue={editing?.description ?? ""} />
           <input name="tags" aria-label="Tags" placeholder="tags, comma, separated" defaultValue={editing?.tags?.join(",") ?? ""} />
           <input name="imageUrl" aria-label="Reference image URL" placeholder="Reference image URL (optional)" defaultValue={editing?.imageUrl ?? ""} />
           <input name="attachmentUrl" type="url" aria-label="Attachment URL" placeholder="Attachment URL (optional)" defaultValue={editing?.attachmentUrl ?? ""} />
           <textarea name="notes" aria-label="Notes" onPaste={onPasteImage} placeholder="Notes (you can paste an image here too)" defaultValue={editing?.notes ?? ""} />
-          {pastedImage && <Image src={pastedImage} alt="Pasted preview" width={320} height={180} className="rounded-lg h-28 w-full object-cover" unoptimized />}
+          {pastedImage && <Image src={pastedImage} alt="Pasted preview" width={320} height={180} className="rounded-lg h-64 w-full object-contain" unoptimized />}
           <button className="px-4 py-2 bg-dreamz-accent text-black font-semibold">{editing ? "Update" : "Add"} card</button>
-          {editing && <button type="button" className="px-4 py-2 bg-purple-900/40" onClick={() => { setEditing(null); setPastedImage(""); }}>Cancel edit</button>}
+          {editing && <button type="button" className="px-4 py-2 bg-purple-900/40" onClick={() => { setEditing(null); setFormStatus("Ideas"); setStatusChanged(false); setPastedImage(""); }}>Cancel edit</button>}
         </form>
       </section>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="grid lg:grid-cols-5 gap-3">
-          {STATUSES.map((status) => <StatusColumn key={status} status={status} cards={activeCards.filter((c) => c.status === status)} onEdit={(card) => { setEditing(card); setPastedImage(""); window.scrollTo({ top: 0, behavior: "smooth" }); }} onDelete={removeCard} onMove={relocateCard} />)}
+          {STATUSES.map((status) => <StatusColumn key={status} status={status} cards={activeCards.filter((c) => c.status === status)} onEdit={(card) => { setEditing(card); setFormStatus(card.status); setStatusChanged(false); setPastedImage(""); window.scrollTo({ top: 0, behavior: "smooth" }); }} onDelete={removeCard} onMove={relocateCard} />)}
         </div>
       </DndContext>
     </main>
